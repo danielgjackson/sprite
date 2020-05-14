@@ -19,15 +19,14 @@ html {
 <body>
 <h1>Sprite Generator Demo</h1>
 <p>This is an 8-bit pixel art style sprite generator, suitable for avatars.  This is an entirely JavaScript implementation based on the techniques used by Lj V. Miranda for the Python/Seagull/Matplotlib-based: <a href="https://github.com/ljvmiranda921/sprites-as-a-service">Sprites-as-a-Service</a>.  As such, this version may be easily run client- or server-side.</p>
+<p><label>Seed: <input id="seed" value="0"></label> -- try changing this.</p>
+<div><img class="sprite" width="360" /></div>
 <p>See also:</p>
 <ul>
   <li><a href="https://github.com/danielgjackson/sprite">GitHub Project Page</a></li>
   <li><a href="https://danielgjackson.github.io/sprite/infinite.html">Infinite Sprites!</a></li>
+  <li><a href="https://github.com/ljvmiranda921/sprites-as-a-service">Sprites-as-a-Service</a> -- the original implementation, whose techniques are recreated in this library.</li>
 </ul>
-<p>
-<label>Seed: <input id="seed" value="0"></label>
-</p>
-<div><img class="sprite" width="360" /></div>
 <script>
 function generate() {
   const seed = document.querySelector('#seed').value;
