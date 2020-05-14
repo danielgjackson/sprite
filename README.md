@@ -6,7 +6,7 @@ This is an entirely JavaScript implementation based on the techniques used by Lj
 
 See example use:
 
-  * [Demo](https://danielgjackson.github.io/sprite/index.html)
+  * [Demo](https://danielgjackson.github.io/sprite/)
   * [Infinite Sprites!](https://danielgjackson.github.io/sprite/infinite.html)
 
 ## Usage
