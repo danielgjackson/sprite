@@ -1,0 +1,42 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Sprite Test</title>
+<script type="module" src="index.mjs"></script>
+<style>
+html {
+  font-family: sans-serif;
+}
+.sprite {
+  image-rendering: auto;
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
+  border: 10px solid black;
+}
+</style>
+</head>
+<body>
+<h1>Sprite Test</h1>
+<p>
+<label>Seed: <input id="seed" value="0"></label>
+</p>
+<div><img class="sprite" width="360" /></div>
+<script>
+function generate() {
+  const seed = document.querySelector('#seed').value;
+  const result = Sprite.generate(seed);
+  const dataUri = result.asDataUri();
+  document.querySelector('.sprite').src = dataUri;
+};
+
+document.addEventListener('DOMContentLoaded', function() {
+  const seed = document.querySelector('#seed');
+  seed.addEventListener('input', generate);
+  seed.focus();
+  seed.select();
+  generate();
+});
+</script>
+</body>
+</html>

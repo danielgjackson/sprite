@@ -1,0 +1,1010 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script type="module" src="index.mjs"></script>
+  <title>Infinite Sprites</title>
+  <style>
+    html {
+      position: fixed;
+      overflow: hidden;
+    }
+
+    body {
+      position: fixed;
+      overflow: hidden;
+      margin: 0;
+      padding: 0;
+      width: 100vw;
+      height: 100vh;
+      font-family: sans-serif;
+      background-color: rgb(15, 15, 15);
+    }
+
+    .scroller-container {
+      overflow: hidden;
+      position: fixed;
+      top: 0;
+      left: 0;
+      border: 2px solid #666;
+      height: 100%;
+      width: 100%;
+      cursor: all-scroll;
+      touch-action: none;
+
+      -webkit-user-drag: none;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+    }
+
+    .scroller {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      transform: translate(0px, 0px);
+      top: 50%;
+      left: 50%;
+      /*
+      transition-property: transform;
+      transition: 0.1s ease-out;
+      */
+    }
+
+    .scroller img {
+      opacity: 1;
+      transition: opacity 0.3s;
+      border-radius: 10px;
+      /*
+        border: 50px solid rgba(50, 50, 50, 0.1);
+        box-sizing: border-box
+      */
+      outline-offset: -1px;
+      outline: 1px solid rgba(15, 15, 15, 0.5);
+      
+      image-rendering: auto;
+      image-rendering: crisp-edges;
+      image-rendering: pixelated;
+    }
+
+    .scroller img[loading] {
+      opacity: 0;
+      transition: opacity 0.0s;
+    }
+
+    .scroller img.selected {
+      /*
+        outline: 6px solid #33f;
+        outline-offset: -5px;
+      */
+      animation: flash 1s infinite;
+      /* filter: brightness(105%); */
+      border: 6px solid #33f;
+      box-sizing: border-box;
+      z-index: 1;
+      transform: scale(1.25);
+      transition: transform 0.25s;
+      box-shadow: 5px 5px 5px rgba(50, 50, 50, 0.3);
+      outline: none;
+    }
+
+    @keyframes flash {
+      50% {
+        /* outline: 5px solid #99f; */
+        border: 6px solid #99f;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="scroller-container">
+    <div id="scroller" class="scroller">
+    </div>
+  </div>
+  <audio></audio>
+</body>
+<script>
+var pointerState = {};
+var scroll = [0, 0];        // Scroll position
+var velocity = [0, 0];      // Scroll velocity
+var maxVelocity = 5;        // pixels/millisecond
+var scrollTo = null;        // Scroll-to position
+var sizeX = (1<<7);
+var sizeY = sizeX;
+var tiles = {};
+var keepCachedTiles = 0;    // keep closest 'n' tiles (0=rely on margin only)
+var marginX = 2;            // Pre-load tile margin of 'n' depth
+var marginY = marginX;
+var scrollUpdateTime = 100;  // Time after scroll to trigger update
+var updates = [];           // Delayed updates (to minimize DOM stress)
+var maxUpdates = 20;        // Maximum number of delayed DOM updates to perform at each interval
+var maxUpdateTime = 12;     // Up to 16 msec for 60 fps
+var updateTime = 1;         // Delay between updates
+var imgSourceTime = 1;      // Delay before setting image source
+var recyclerImg = [];       // IMG Element recycler (null to disable)
+var useBackground = true;
+var usePlaceholder = !true;
+var seed = '' + Date.now(); // Random seed string (null=none)
+var limit = 0;              // Temporary limit on number of images (0=disable)
+var limitShuffle = false;   // Temporary limit images are subset (otherwise first N)
+var keys = [false, false, false, false];  // Pressed keys (LURD)
+var keysReleased = [false, false, false, false];  // Released keys (so brief presses latch for one update)
+var keyboardAccel = 0.05;
+var friction = 0.08;
+var staticFriction = 0.001;
+var selectedTag = null;     // Selected element
+var selectedId = null;      // Id of selected element (not a unique tile)
+var selectedImage = null;   // Image of selected element (may be recycled)
+
+if (!Math.imul) Math.imul = function(a, b) {
+  var aHi = (a >>> 16) & 0xffff;
+  var aLo = a & 0xffff;
+  var bHi = (b >>> 16) & 0xffff;
+  var bLo = b & 0xffff;
+  return ((aLo * bLo) + (((aHi * bLo + aLo * bHi) << 16) >>> 0) | 0);
+};
+function hashString(text) {
+  var h = 1779033703 ^ text.length;
+  for (var i = 0; i < text.length; i++) {
+    h = Math.imul(h ^ text.charCodeAt(i), 3432918353),
+    h = h << 13 | h >>> 19
+  }
+  for (var i = 0; i < 0; i++) {
+    h = Math.imul(h ^ h >>> 16, 2246822507);
+    h = Math.imul(h ^ h >>> 13, 3266489909);
+    h = (h ^= h >>> 16) >>> 0;
+  }
+  return Math.abs(h);
+}
+
+function spiralUnwind(x, y) {
+  // Spiral index from coordinates
+  // From: https://superzhu.gitbooks.io/bigdata/algo/get_spiral_index_from_location.html
+  var index = 0;
+  if (x * x >= y * y) {
+    index = 4 * x * x - x - y;
+    if (x < y)
+      index = index - 2 * (x - y);
+  } else {
+    index = 4 * y * y - x - y;
+    if (x < y)
+      index = index + 2 * (x - y);
+  }
+  return index;
+}
+
+function tileToId(x, y) {
+  var index = spiralUnwind(x, y);
+  if (seed !== null) {
+    index = hashString('' + seed + x + y + index);
+  }
+  return index;
+}
+
+function tileTag(x, y) {
+  return '' + x + ',' + y;
+}
+
+function addTile(x, y, id) {
+  var tag = tileTag(x, y);
+  var label = null;
+  var px = sizeX * x;
+  var py = sizeY * y;
+  var scroller = document.getElementById('scroller');
+  
+  //label = '@(' + x + ',' + y + ')=' + id;
+  
+  var image;
+  var newImage;
+  if (recyclerImg !== null && recyclerImg.length > 0) {
+    image = recyclerImg.pop();
+    newImage = false;
+    image.removeAttribute('src');
+  } else {
+    image = document.createElement('IMG');
+    imageHandler(image);
+    newImage = true;
+  }
+  image.onload = function() { 
+    setTimeout(function() {
+      if (image.src == image.getAttribute('datasrc')) {
+        image.removeAttribute('loading') 
+      }
+    }, 1);
+
+  };
+
+  image.setAttribute('width', '' + sizeX);
+  image.setAttribute('height', '' + sizeY);
+  var additionalStyle = '';
+  var backgroundVisible = false;
+  /*
+  if (useBackground && images[id].bgcolor) {
+    additionalStyle += ' background-color: ' + images[id].bgcolor + ';';
+    backgroundVisible = true;
+  }
+  if (usePlaceholder && images[id].placeholder) {
+    additionalStyle += ' background-size: cover; background-image: url(\'' + images[id].placeholder + '\');';
+    backgroundVisible = true;
+  }
+  */
+  image.setAttribute('style', 'position: absolute; left: ' + px + 'px; top: ' + py + 'px;' + additionalStyle);
+  if (label !== null) image.setAttribute('title', label);
+  if (backgroundVisible) {
+    if (true) {
+      image.removeAttribute('loading'); 
+    } else {
+      image.setAttribute('loading', true);
+      setTimeout(function() {
+        image.removeAttribute('loading'); 
+      }, 3);
+    }
+  } else {
+    image.setAttribute('loading', true);
+  }
+  image.setAttribute('dataid', id);
+  image.setAttribute('datatag', tag);
+  image.setAttribute('datasrc', generateImage(id));
+  if (tag == selectedTag) {
+    selectedImage = image;
+    image.className = 'selected';
+  } else {
+    image.className = '';
+  }
+
+  if (newImage) {
+    scroller.appendChild(image);
+  }
+
+  // Set the source last so that the loaded style and onload events apply properly (especially for recycled images)
+  image.onload = function() { 
+    image.removeAttribute('loading'); 
+  };
+  image.loading = 'true';
+  function setSource() {
+    image.src = image.getAttribute('datasrc') // images[id].image
+  }
+  if (imgSourceTime == 0) setSource();
+  else setTimeout(setSource, imgSourceTime);
+
+  var tile = {
+    tag: tag,
+    x: x,
+    y: y,
+    id: id,
+    image: image,
+  }
+  tiles[tag] = tile;
+}
+
+var updateTimer = null;
+function executeUpdates() {
+  //console.log('UPDATE...' + updates.length);
+  var start = performance.now();
+  updateTimer = null;
+  for (var i = 0; updates.length > 0 && i < maxUpdates; i++) {
+    var update = updates.shift();
+    update();
+    var now = performance.now();
+    if (now - start >= maxUpdateTime) {
+        //console.log('' + i + ' -- ' + (now - start) + '/' + maxUpdateTime + ' -- ' + updates.length);
+        break;
+    }
+  }
+  if (updates.length > 0) triggerUpdates();
+}
+
+function triggerUpdates() {
+  //console.log('TRIGGER...' + updates.length);
+  if (updateTimer === null && updates.length > 0) {
+    //console.log('SCHEDULED...' + updates.length);
+    updateTimer = setTimeout(executeUpdates, updateTime);
+  }
+}
+
+var midTileX = 0, midTileY = 0;
+function updateTiles() {
+  var scroller = document.getElementById('scroller');
+  var container = scroller.parentElement;
+
+  var viewport = {
+    x: -scroll[0] - (container.clientWidth / 2),
+    y: -scroll[1] - (container.clientHeight / 2),
+    w: container.clientWidth,
+    h: container.clientHeight,
+  };
+
+  // Mid-point
+  var midX = viewport.x + (viewport.w / 2);
+  var midY = viewport.y + (viewport.h / 2);
+  var firstTileX = Math.floor(viewport.x / sizeX) - marginX;
+  var firstTileY = Math.floor(viewport.y / sizeY) - marginY;
+  midTileX = midX / sizeX;
+  midTileY = midY / sizeY;
+
+  function tileDistance(tile) {
+    var dx = tile.x - midTileX;
+    var dy = tile.y - midTileY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  // Find candidates to add
+  var lastTileX = Math.floor((viewport.x + viewport.w + sizeX - 1) / sizeX) + marginX;
+  var lastTileY = Math.floor((viewport.y + viewport.h + sizeY - 1) / sizeY) + marginY;
+  var maxCols = lastTileX - firstTileX;
+  var maxRows = lastTileY - firstTileY;
+  var addCandidates = [];
+  for (var row = 0; row < maxRows; row++) {
+    for (var col = 0; col < maxCols; col++) {
+      var tx = firstTileX + col;
+      var ty = firstTileY + row;
+      var tag = tileTag(tx, ty);
+      //console.log('TESTING: @(' + tx + ', ' + ty + ')=' + tag);
+      if (!tiles[tag]) {
+        //console.log('...adding!');
+        addCandidates.push({
+          x: tx,
+          y: ty,
+        });
+      }
+    }
+  }
+
+  addCandidates.sort(function(a, b) {
+    return tileDistance(a) - tileDistance(b);   // nearest first
+  });
+
+  var addUpdates = [];
+  for (var i = 0; i < addCandidates.length; i++) {
+    var candidate = addCandidates[i];
+    var id = tileToId(candidate.x, candidate.y);
+    (function(x, y, id) {
+      addUpdates.push(function() {
+        //console.log('ADD: @(' + x + ', ' + y + ')=' + id + '');
+        addTile(x, y, id);
+      });
+    })(candidate.x, candidate.y, id);
+  }
+
+
+  // Find candidates to remove
+  var removeCandidates = [];
+  var tileKeys = Object.keys(tiles);
+  for (var i = 0; i < tileKeys.length; i++) {
+    var tag = tileKeys[i];
+    var tile = tiles[tag];
+    var visible;
+    visible = tile.x >= firstTileX && tile.x < lastTileX && tile.y >= firstTileY && tile.y < lastTileY;
+    if (!visible) {
+      removeCandidates.push(tile);
+    }
+  }
+
+  removeCandidates.sort(function(a, b) {
+    // TODO: Replace with a distance-to-edge metric?
+    return -(tileDistance(a) - tileDistance(b));   // furthest first
+  });
+
+  // Allow the closest 'n' cached tiles to persist
+  if (keepCachedTiles > 0) {
+    removeCandidates.splice(-keepCachedTiles);
+  }
+
+  // Remove remaining candidates
+  var removeUpdates = [];
+  for (var i = 0; i < removeCandidates.length; i++) {
+    var tile = removeCandidates[i];
+    (function(tile) {
+      removeUpdates.push(function() {
+        //console.log('DELETE: ' + tile.tag + ' (' + tile.x * sizeX + ',' + tile.y * sizeY + ') outside ' + JSON.stringify(clip));
+        var image = tile.image;
+        delete tiles[tile.tag];
+        if (recyclerImg !== null) {
+          image.style.visibility = 'hidden';
+          image.removeAttribute('onload');
+          image.src = '';
+          image.removeAttribute('src');
+          recyclerImg.push(image);
+        } else {
+          scroller.removeChild(image);
+        }
+      });
+    })(tile);
+  }
+
+  // Clear delayed update list
+  updates = [];
+  // Interleave remove/add updates to balance total number of elements
+  for (var i = 0; i < Math.max(addUpdates.length, removeUpdates.length); i++) {
+    if (i < removeUpdates.length) updates.push(removeUpdates[i]);
+    if (i < addUpdates.length) updates.push(addUpdates[i]);
+  }
+
+  triggerUpdates();
+}
+
+
+// Performance polyfill
+var firstTime = null;
+if (!window.performance) {
+  window.performance = {};
+  if (!performance.now) {
+    performance.now = function () {
+      var t = (Date.now ? Date.now() : +(new Date)) - startOffset;
+      if (firstTime === null) firstTime = t;
+      return t - firstTime;
+    };
+  }
+}
+
+if (!window.requestAnimationFrame) {
+  window.requestAnimationFrame = function(callback, element) {
+    var currTime = performance.now();
+    var timeToCall = Math.max(0, 16 - (currTime - lastTime));
+    var id = window.setTimeout(function() { callback(currTime + timeToCall); }, timeToCall);
+    lastTime = currTime + timeToCall;
+    return id;
+  };
+  window.cancelAnimationFrame = function(id) {
+    clearTimeout(id);
+  };
+}
+
+
+function spiralSearch(f, max) {
+  for (var x = 0, y = 0, dx = 0, dy = -1, i = 0; !max || i < max; x += dx, y += dy, i++) {
+    var ret = f(x, y, i);
+    if (ret) return ret;
+    if ((x === y) || ((x < 0) && (x === -y)) || ((x > 0) && (x === 1 - y))) {
+      var t = dx;
+      dx = -dy;
+      dy = t;
+    }
+  }
+  return null;
+}
+
+
+var animationTimerId = null;
+var lastTime = null;
+function animation() {
+  var now = performance.now();
+  if (lastTime === null) lastTime = now;
+  var elapsed = now - lastTime;
+  if (elapsed <= 0) elapsed = 1/60;
+
+  if (scrollTo) {
+    //console.log('SCROLL: ' + scroll + ' --> ' + scrollTo);
+    var dx = -scroll[0] - scrollTo[0];
+    var dy = -scroll[1] - scrollTo[1];
+	var margin = 4;
+    var prop = 0.2;
+    scroll[0] += prop * dx;
+    scroll[1] += prop * dy;
+    if (Math.abs(dx) <= margin && Math.abs(dy) <= margin) {
+      scroll[0] = -scrollTo[0];
+      scroll[1] = -scrollTo[1];
+      scrollTo = null;
+    }
+    velocity = [0, 0];
+  }
+  
+  var ks = keyboardScroll();
+  if (!scrollTo) {
+    for (var i = 0; i < 4; i++) {
+      if (keysReleased[i]) {
+        keys[i] = false;
+        keysReleased[i] = false;
+      }
+    }
+    velocity[0] += ks[0];
+    velocity[1] += ks[1];
+    if (velocity[0] < -maxVelocity) velocity[0] = -maxVelocity;
+    if (velocity[0] > maxVelocity) velocity[0] = maxVelocity;
+    if (velocity[1] < -maxVelocity) velocity[1] = -maxVelocity;
+    if (velocity[1] > maxVelocity) velocity[1] = maxVelocity;
+  
+    scroll[0] += elapsed * velocity[0];
+    scroll[1] += elapsed * velocity[1];
+  }
+  
+  updateScroll();
+
+  // Friction
+  velocity[0] *= (1 - friction);
+  velocity[1] *= (1 - friction);  
+  if (ks[0] == 0 && Math.abs(velocity[0]) < staticFriction) velocity[0] = 0;
+  if (ks[1] == 0 && Math.abs(velocity[1]) < staticFriction) velocity[1] = 0;
+
+  // ---
+  lastTime = now;
+  var moving = !!scrollTo;
+  if (velocity[0] != 0) moving = true;
+  if (velocity[1] != 0) moving = true;
+//console.log(velocity, moving);
+
+  if (moving) {
+    animationTimerId = window.requestAnimationFrame(animation);
+  } else {
+    animationTimerId = null;
+    lastTime = null;
+  }
+}
+
+function startAnimation() {
+  if (animationTimerId === null) {
+    lastTime = null;
+    animationTimerId = window.requestAnimationFrame(animation);
+  }
+}
+
+function stopAnimation() {
+  if (animationTimerId !== null) {
+    cancelAnimationFrame(animationTimerId);
+    animationTimerId = null;
+    lastTime = null;
+  }
+}
+
+
+
+var scrollUpdateTimerId = null;
+
+function modulo(value, lower, upper) {
+  var mult = Math.floor((value - lower) / (upper - lower));
+  return value - mult * (upper - lower);
+}
+
+function updateScroll() {
+  var ratio = window.devicePixelRatio || 1;
+  var transformText = "translate(" + (Math.floor(scroll[0] * ratio) / ratio) + "px, " + (Math.floor(scroll[1] * ratio) / ratio) + "px)";
+  if (document.getElementById('scroller').style.transform != transformText) {
+    document.getElementById('scroller').style.transform = transformText;
+  }
+  //console.log('SCROLLED!');
+  if (scrollUpdateTimerId === null) {
+    updateTiles();    // Call immediately
+    // ...and begin timeout for next call
+    scrollUpdateTimerId = setTimeout(function() {
+      //console.log('SCROLLED-TIMEOUT');
+      updateTiles();
+      scrollUpdateTimerId = null;
+    }, scrollUpdateTime);
+  }
+}
+window.addEventListener('resize', updateScroll);
+
+function start() {
+  updateTiles();      // create initial set now
+  updateScroll();     // trigger recalculate
+  startAnimation();   // begin animation (will auto-stop)
+}
+
+function keyboardScroll() {
+  var dx = 0;
+  var dy = 0;
+  if (keys[0]) dx += 1;
+  if (keys[1]) dy += 1;
+  if (keys[2]) dx -= 1;
+  if (keys[3]) dy -= 1;
+  return [dx * keyboardAccel, dy * keyboardAccel]
+}
+
+function key(k, pressed) {    // 0=L, 1=U, 2=R, 3=D
+  if (pressed)
+    keys[k] = pressed;
+  else
+    keysReleased[k] = true;
+  startAnimation();
+}
+
+function received(input) {
+  var search = input.trim().toLowerCase();
+  if (search.length <= 0) {
+    deselect();
+    return;
+  }
+  search = '/' + search + '.';
+  console.log('SEARCHING: ' + search);
+  var foundIndex = null;
+  /*
+  for (var i = 0; i < images.length; i++) {
+    var image = images[i].image;
+    if (image.toLowerCase().indexOf(search) >= 0 && foundIndex === null) {
+      foundIndex = i;
+    }
+  }
+  */
+  if (foundIndex === null) {
+    console.log('...not found');
+    return;
+  }
+  //console.log('...found image: #' + foundIndex + ' -- ', images[foundIndex]);
+  
+  var foundXY = spiralSearch(function(x, y, i) {
+    var tx = Math.round(midTileX) + x;
+    var ty = Math.round(midTileY) + y;
+    var id = tileToId(tx, ty);
+    //console.log('SEARCH #' + i + ' (' + x + ',' + y + ') => (' + tx + ',' + ty + ') = ' + id + '');
+    if (id == foundIndex) return [tx, ty];
+    return null;
+  }, 10000);
+  
+  var tag = null;
+  var tx = null, ty = null;
+  if (!foundXY) {
+    console.log('...did not find tile within search size.');
+  } else {
+    tx = foundXY[0];
+    ty = foundXY[1];
+    var rx = tx - Math.round(midTileX);
+    var ry = ty - Math.round(midTileY);
+    tag = tileTag(tx, ty);
+    console.log('...found nearest tile: @(' + tx + ',' + ty + ') relative (' + rx + ',' + ry + ')');
+  }
+  
+  var image = null;
+  if (tag && tiles[tag]) {
+    image = tiles[tag].image;
+  }
+
+  /*  
+  if (!images[foundIndex].audio) {
+    console.log('...no audio!');
+  }
+  */
+  select(foundIndex, tag, image);
+  
+  if (tx !== null && ty !== null) {
+    var sx = (tx + 0.5) * sizeX;
+    var sy = (ty + 0.5) * sizeY;
+    scrollTo = [sx, sy];
+    console.log('SCROLLTO:', scrollTo);
+    startAnimation();
+  }
+}
+
+var inputBuffer = '';
+var inputTimeoutId = null;
+window.addEventListener('keypress', function(event) {
+  // Clear any input timeout
+  if (inputTimeoutId !== null) {
+    clearTimeout(inputTimeoutId);
+    inputTimeoutId = null;
+  }
+
+  if (event.keyCode > 32 && event.keyCode < 127) {
+    inputBuffer += String.fromCharCode(event.keyCode);
+  }
+  
+  // Timeout if has input
+  if (inputBuffer.length > 0) {
+    console.log('INPUT: ' + inputBuffer);
+    inputTimeoutId = setTimeout(function() {
+      console.log('INPUT: (timeout)');
+      //received(inputBuffer);
+      inputBuffer = '';
+    }, 2000);
+  }
+});
+
+window.addEventListener('keydown', function(event) {
+  // Clear any input timeout
+  if (inputTimeoutId !== null) {
+    clearTimeout(inputTimeoutId);
+    inputTimeoutId = null;
+  }
+  
+  if (event.keyCode === 13) {  // Enter
+    received(inputBuffer);
+    inputBuffer = '';
+  } else if (event.which === 27) {  // Escape
+    inputBuffer = '';
+    console.log('INPUT: (cancel)');
+  } else if (event.which === 8) {  // Backspace
+    inputBuffer = inputBuffer.slice(0, -1);
+    console.log('INPUT: ' + inputBuffer);
+  } else if (event.which >= 37 && event.which <= 40) {  // Arrow keys, 37=L, 38=U, 39=R, 40=D
+    key(event.which - 37, true);
+  }
+});
+
+window.addEventListener('keyup', function(event) {
+  // 37=L, 38=U, 39=R, 40=D
+  if (event.which >= 37 && event.which <= 40) {
+    key(event.which - 37, false);
+  }
+});
+
+document.addEventListener('paste', function(e) {
+  if (e.clipboardData) {
+    var text = e.clipboardData.getData('Text');
+    if (inputTimeoutId !== null) {
+      clearTimeout(inputTimeoutId);
+      inputTimeoutId = null;
+    }
+    inputBuffer = text;
+    console.log('PASTE:', inputBuffer);
+    received(inputBuffer);
+    inputBuffer = '';
+  } 
+  e.preventDefault();
+});
+
+function track(state, type, event) {
+  var now = performance.now();    // Is event.timeStamp as precise?
+  //console.log(type, event.pointerId, event.clientX, event.clientY);
+  if (!state.hasOwnProperty('history')) {
+    state.begin = now;
+    state.firstX = event.clientX;
+    state.firstY = event.clientY;
+    state.moved = false;
+    state.history = [];
+  };
+  state.history.push({
+    t: now,
+    x: event.clientX,
+    y: event.clientY,
+  });
+  // Trim to recent
+  while(state.history.length > 0 && now - state.history[0].t > 200) state.history.shift();
+  state.x = event.clientX;
+  state.y = event.clientY;
+  if (type === 'down') {
+    state.lastX = state.x;
+    state.lastY = state.y;
+  }
+  if (type === 'move') {
+    var elapsed = now - state.lastTime;
+    //if (elapsed < 0 || elapsed > 500) { elapsed = 500; }
+    if (!state.moved) {
+      var threshold = 5;
+      if (Math.abs(state.x - state.firstX) > threshold || Math.abs(state.y - state.firstY) > threshold) {
+        state.moved = true;
+      }
+    }
+    
+    var dx = state.x - state.lastX;
+    var dy = state.y - state.lastY;
+
+    scroll[0] += dx;
+    scroll[1] += dy;
+
+    updateScroll();
+
+    state.lastX = state.x;
+    state.lastY = state.y;
+  }
+  if (type === 'up' && elapsed !== 0) {
+    var elapsed = now - state.history[0].t;
+    // Minimum drag time
+    if (elapsed > 50) {
+      var dx = state.x - state.history[0].x;
+      var dy = state.y - state.history[0].y;
+      velocity[0] += dx / elapsed;
+      velocity[1] += dy / elapsed;
+      startAnimation();
+    }
+  }
+  return state.moved;
+}
+
+var pointerElement = window;
+pointerElement = document.querySelector('html');
+//pointerElement = document.querySelector('.scroller-container');
+
+function log() {
+  var result = Array.prototype.slice.call(arguments).map(function (x) { return JSON.stringify(x); }).join(' ');
+  console.log(result);
+  //window.alert(result);
+}
+
+/*
+pointerElement.addEventListener('pointerdown', function(event) {
+  //event.preventDefault();
+  pointerState[event.pointerId] = {};
+  pointerElement.setPointerCapture(event.pointerId);
+  //log("POINTERDOWN", event, pointerState[event.pointerId]);
+  track(pointerState[event.pointerId], 'down', event);
+}, true);
+pointerElement.addEventListener('pointermove', function(event) {
+  if (pointerState.hasOwnProperty(event.pointerId)) {
+    event.preventDefault();
+    //log("POINTERMOVE", event, pointerState[event.pointerId]);
+    track(pointerState[event.pointerId], 'move', event);
+  }
+}, true);
+pointerElement.addEventListener('pointerup', function(event) {
+  if (pointerState.hasOwnProperty(event.pointerId)) {
+    event.preventDefault();
+    //log("POINTERUP", event, pointerState[event.pointerId]);
+    track(pointerState[event.pointerId], 'up', event)
+    delete pointerState[event.pointerId];
+  }
+}, true);
+pointerElement.addEventListener('pointercancel', function(event) {
+  if (pointerState.hasOwnProperty(event.pointerId)) {
+    event.preventDefault();
+    //log("POINTERCANCEL", event, pointerState[event.pointerId]);
+    track(pointerState[event.pointerId], 'cancel', event);
+    delete pointerState[event.pointerId];
+  }
+}, true);
+*/
+
+function copyTouch(touch) {
+  return { identifier: touch.identifier, clientX: touch.clientX, clientY: touch.clientY };
+}
+
+pointerElement.addEventListener('touchstart', function(event) {
+  //event.preventDefault();
+  for (var i = 0; i < event.changedTouches.length; i++) {
+    var touch = copyTouch(event.changedTouches[i]);
+    pointerState[touch.identifier] = {};
+    //log("TOUCHSTART", touch, pointerState[touch.identifier]);
+    track(pointerState[touch.identifier], 'down', touch);
+  }
+}, true);
+pointerElement.addEventListener('touchmove', function(event) {
+  event.preventDefault();
+  for (var i = 0; i < event.changedTouches.length; i++) {
+    var touch = copyTouch(event.changedTouches[i]);
+    if (pointerState.hasOwnProperty(touch.identifier)) {
+      //log("TOUCHMOVE", touch, pointerState[touch.identifier]);
+      track(pointerState[touch.identifier], 'move', touch);
+    }
+  }
+}, true);
+pointerElement.addEventListener('touchend', function(event) {
+  //event.preventDefault();
+  for (var i = 0; i < event.changedTouches.length; i++) {
+    var touch = copyTouch(event.changedTouches[i]);
+    if (pointerState.hasOwnProperty(touch.identifier)) {
+      //log("TOUCHEND", touch, pointerState[touch.identifier]);
+      track(pointerState[touch.identifier], 'up', touch);
+      delete pointerState[event.identifier];
+    }
+  }
+}, true);
+pointerElement.addEventListener('touchcancel', function(event) {
+  //event.preventDefault();
+  for (var i = 0; i < event.changedTouches.length; i++) {
+    var touch = copyTouch(event.changedTouches[i]);
+    if (pointerState.hasOwnProperty(touch.identifier)) {
+      //log("TOUCHCANCEL", touch, pointerState[touch.identifier]);
+      track(pointerState[touch.identifier], 'cancel', touch);
+      delete pointerState[event.identifier];
+    }
+  }
+}, true);
+
+
+var mouseObject = null;
+var lastClickMoved = false; // Fix IE click-after-pan bug
+pointerElement.addEventListener('mousedown', function(event) {
+  lastClickMoved = false;
+  //event.preventDefault();
+  mouseObject = {};
+  mouseObject.captured = false;
+  //log("MOUSEDOWN", event, mouseObject);
+  track(mouseObject, 'down', event);
+}, true);
+pointerElement.addEventListener('mousemove', function(event) {
+  if (mouseObject !== null) {
+    if (!mouseObject.captured) {
+      if (pointerElement.setCapture) pointerElement.setCapture(true);
+      mouseObject.captured = true;
+    }
+    event.preventDefault();
+    //log("MOUSEMOVE", event, mouseObject);
+    track(mouseObject, 'move', event);
+  }
+}, true);
+pointerElement.addEventListener('mouseup', function(event) {
+  if (mouseObject !== null) {
+    if (pointerElement.releaseCapture) pointerElement.releaseCapture();
+    mouseObject.captured = false;
+    //log("MOUSEUP", event, mouseObject);
+    var moved = track(mouseObject, 'up', event);
+    if (moved) {
+      //log('MOVED!');
+      event.preventDefault();
+      lastClickMoved = true;
+    }
+    mouseObject = null;
+  }
+}, true);
+
+function imageHandler(image) {
+  image.setAttribute('draggable', 'false');
+  image.addEventListener('dragstart', function(event) {
+    event.preventDefault();
+    return false;
+  });
+  image.addEventListener('click', function(event) {
+    if (lastClickMoved) { 
+      lastClickMoved = false; 
+      return;
+    }
+    var image = event.target;
+    var id = image.getAttribute('dataid');
+    var tag = image.getAttribute('datatag');
+    // var parts = tag.split(',');
+    // var x = parseInt(parts[0]);
+    // var y = parseInt(parts[1]);
+    //var data = images[id];
+
+    select(id, tag, image);
+    
+    //var label = '#' + id + ' @(' + x + ',' + y + ') == ' + JSON.stringify(data);
+    //window.alert(label);
+  });
+}
+
+var audio = document.querySelector('audio');
+audio.addEventListener('ended', function() {
+  deselect();
+}, false);
+audio.addEventListener('error', function(e) {
+  console.log('AUDIO-ERROR: ', e)
+  deselect();
+}, false);
+
+function deselect() {
+  audio.pause();
+  if (selectedImage) {
+    selectedImage.className = '';
+    selectedImage = null;
+  }
+  selectedTag = null;
+  selectedId = null;
+  //scrollTo = null;
+}
+
+function select(id, tag, image) {
+  // var parts = tag.split(',');
+  // var x = parseInt(parts[0]);
+  // var y = parseInt(parts[1]);
+return;
+  var data = images[id];
+
+  var newSelection = !tag || (selectedTag != tag);
+  
+  console.log('SELECT: id=' + id + ' tag=' + tag + ' image=' + image + ' new=' + newSelection);
+
+  deselect(); // clear old image class
+
+  selectedTag = tag;
+  selectedId = id;
+  selectedImage = image;
+
+  if (image) {
+    image.className = 'selected';
+  }
+
+  if (!newSelection) { deselect(); return; }
+
+  if (data.audio) {
+    audio.src = data.audio;
+    audio.play();
+  } else {
+    setTimeout(deselect, 100);  // Time to show a selection was made
+  }
+}
+
+function generateImage(id) {
+  if (!window.hasOwnProperty('Sprite')) return;
+  const result = window.Sprite.generate("" + id);
+  const dataUri = result.asDataUri();
+  return dataUri;
+};
+
+document.addEventListener('DOMContentLoaded', start);
+
+</script>
+</html>

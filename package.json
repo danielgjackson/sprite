@@ -1,0 +1,28 @@
+{
+  "name": "sprite",
+  "version": "1.0.0",
+  "description": "JavaScript 8-bit style pixel sprite generator.",
+  "main": "sprite.mjs",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/danielgjackson/sprite.git"
+  },
+  "keywords": [
+    "sprite",
+    "generator",
+    "8-bit",
+    "pixel"
+  ],
+  "author": "Daniel Jackson",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/danielgjackson/sprite/issues"
+  },
+  "homepage": "https://github.com/danielgjackson/sprite#readme"
+}
