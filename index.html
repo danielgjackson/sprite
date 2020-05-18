@@ -3,7 +3,6 @@
 <head>
 <meta charset="utf-8">
 <title>Sprite Generator Demo</title>
-<script type="module" src="webglobal.mjs"></script>
 <style>
 html {
   font-family: sans-serif;
@@ -27,7 +26,9 @@ html {
   <li><a href="https://danielgjackson.github.io/sprite/infinite.html">Infinite Sprites!</a></li>
   <li><a href="https://github.com/ljvmiranda921/sprites-as-a-service">Sprites-as-a-Service</a> -- the original implementation, whose techniques are recreated in this library.</li>
 </ul>
-<script>
+<script type="module">
+import Sprite from './sprite.mjs';
+
 function generate() {
   const seed = document.querySelector('#seed').value;
   const result = Sprite.generate(seed);

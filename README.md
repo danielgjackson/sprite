@@ -39,3 +39,8 @@ img {
   image-rendering: pixelated;
 }
 ```
+
+
+<!--
+tsc -t ES6 sprite.ts && move /y sprite.js sprite.mjs
+-->

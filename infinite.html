@@ -3,7 +3,6 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <script type="module" src="webglobal.mjs"></script>
   <title>Infinite Sprites!</title>
   <style>
     html {
@@ -108,7 +107,11 @@
   </div>
   <audio></audio>
 </body>
-<script>
+<script type="module">
+import Sprite from './sprite.mjs';
+
+var alpha = false;
+
 var pointerState = {};
 var scroll = [0, 0];        // Scroll position
 var velocity = [0, 0];      // Scroll velocity
@@ -998,9 +1001,8 @@ return;
 }
 
 function generateImage(id) {
-  if (!window.hasOwnProperty('Sprite')) return;
-  const result = window.Sprite.generate("" + id);
-  const dataUri = result.asDataUri();
+  var result = Sprite.generate("" + id);
+  var dataUri = result.asDataUri(alpha);
   return dataUri;
 };
 
