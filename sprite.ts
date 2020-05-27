@@ -30,11 +30,12 @@ function rngNext(state: [number, number]): number {
 function BitmapGenerate(data: Array<[number, number, number, number]>, width: number, height: number, alpha: boolean = false)
 {
     const bitsPerPixel = alpha ? 32 : 24;
-    const bmpHeaderSize = alpha ? 122 : 54;
-    const paletteSize = ((bitsPerPixel <= 8) ? (1 << bitsPerPixel) : 0) << 2;               // Number of palette bytes
+    const fileHeaderSize = 14;
+    const bmpHeaderSize = alpha ? 108 : 12;    // 12=BITMAPCOREHEADER, 40=BITMAPINFOHEADER, 56=BITMAPV3INFOHEADER, 108=BITMAPV4HEADER, 124=BITMAPV5HEADER
+    const paletteSize = ((bitsPerPixel <= 8) ? (1 << bitsPerPixel) : 0) * (bmpHeaderSize <= 12 ? 3 : 4); // Number of palette bytes (Core is BGR, otherwise BGRX)
     const stride = 4 * Math.floor((width * Math.floor((bitsPerPixel + 7) / 8) + 3) / 4);    // Byte width of each line
     const biSizeImage = stride * Math.abs(height);                                          // Total number of bytes that will be written
-    const bfOffBits = bmpHeaderSize + paletteSize;
+    const bfOffBits = fileHeaderSize + bmpHeaderSize + paletteSize;
     const bfSize = bfOffBits + biSizeImage;
     
     const buffer = new ArrayBuffer(bfSize)
@@ -46,34 +47,43 @@ function BitmapGenerate(data: Array<[number, number, number, number]>, width: nu
     view.setUint16(6, 0, true);                 // @6 WORD bfReserved1
     view.setUint16(8, 0, true);                 // @8 WORD bfReserved2
     view.setUint32(10, bfOffBits, true);        // @10 DWORD bfOffBits
-    view.setUint32(14, bmpHeaderSize - 14, true);// @14 DWORD biSize
-    view.setUint32(18, width, true);            // @18 DWORD biWidth
-    view.setInt32(22, -height, true);           // @22 DWORD biHeight (negative for top-down)
-    view.setUint16(26, 1, true);                // @26 WORD biPlanes
-    view.setUint16(28, bitsPerPixel, true);     // @28 WORD biBitCount
-    view.setUint32(30, alpha ? 3 : 0, true);    // @30 DWORD biCompression (0=BI_RGB, 3=BI_BITFIELDS)
-    view.setUint32(34, biSizeImage, true);      // @34 DWORD biSizeImage
-    view.setUint32(38, 2835, true);             // @38 DWORD biXPelsPerMeter
-    view.setUint32(42, 2835, true);             // @42 DWORD biYPelsPerMeter
-    view.setUint32(46, 0, true);                // @46 DWORD biClrUsed
-    view.setUint32(50, 0, true);                // @50 DWORD biClrImportant
-    // @54 <end>
-    if (alpha) {  // BI_BITFIELDS
-      view.setUint32(54, 0x00ff0000, true);     // Red channel mask
-      view.setUint32(58, 0x0000ff00, true);     // Green channel mask
-      view.setUint32(62, 0x000000ff, true);     // Blue channel mask
-      view.setUint32(66, 0xff000000, true);     // Alpha channel mask
-      const colorSpace = "Win ";
-      view.setUint8(70, colorSpace.charCodeAt(3));
-      view.setUint8(71, colorSpace.charCodeAt(2));
-      view.setUint8(72, colorSpace.charCodeAt(1));
-      view.setUint8(73, colorSpace.charCodeAt(0));
-      // Remainder unused for "Win "
+    // BITMAPCOREHEADER
+    view.setUint32(14, bmpHeaderSize, true);    // @14 DWORD biSize
+    if (bmpHeaderSize < 40) { // BITMAPCOREHEADER)
+      view.setUint16(18, width, true);            // @18 WORD biWidth
+      view.setInt16(20, height, true);            // @20 WORD biHeight
+      view.setUint16(22, 1, true);                // @26 WORD biPlanes
+      view.setUint16(24, bitsPerPixel, true);     // @28 WORD biBitCount
+    } else { // BITMAPINFOHEADER
+      view.setUint32(18, width, true);            // @18 DWORD biWidth
+      view.setInt32(22, height, true);            // @22 DWORD biHeight
+      view.setUint16(26, 1, true);                // @26 WORD biPlanes
+      view.setUint16(28, bitsPerPixel, true);     // @28 WORD biBitCount
+      view.setUint32(30, alpha ? 3 : 0, true);    // @30 DWORD biCompression (0=BI_RGB, 3=BI_BITFIELDS)
+      view.setUint32(34, biSizeImage, true);      // @34 DWORD biSizeImage
+      view.setUint32(38, 2835, true);             // @38 DWORD biXPelsPerMeter
+      view.setUint32(42, 2835, true);             // @42 DWORD biYPelsPerMeter
+      view.setUint32(46, 0, true);                // @46 DWORD biClrUsed
+      view.setUint32(50, 0, true);                // @50 DWORD biClrImportant
+      if (bmpHeaderSize >= 56) {  // BITMAPV3INFOHEADER (BI_BITFIELDS values)
+        view.setUint32(54, 0x00ff0000, true);     // Red channel mask
+        view.setUint32(58, 0x0000ff00, true);     // Green channel mask
+        view.setUint32(62, 0x000000ff, true);     // Blue channel mask
+        view.setUint32(66, 0xff000000, true);     // Alpha channel mask
+        if (bmpHeaderSize >= 108) {  // BITMAPV4HEADER / BITMAPV5HEADER (color profile)
+            const colorSpace = "Win ";
+            view.setUint8(70, colorSpace.charCodeAt(3));
+            view.setUint8(71, colorSpace.charCodeAt(2));
+            view.setUint8(72, colorSpace.charCodeAt(1));
+            view.setUint8(73, colorSpace.charCodeAt(0));
+            // Remainder unused for "Win "
+        }
+      }
     }
     
     // Write pixels
     for (let y = 0; y < height; y++) {
-      let offset = bmpHeaderSize + y * stride;
+      let offset = bfOffBits + (height - 1 - y) * stride;
       for (let x = 0; x < width; x++) {
         const value = data[y * width + x];
         view.setUint8(offset + 0, value[2]);    // B
