@@ -143,6 +143,7 @@ var staticFriction = 0.001;
 var selectedTag = null;     // Selected element
 var selectedId = null;      // Id of selected element (not a unique tile)
 var selectedImage = null;   // Image of selected element (may be recycled)
+var monochrome = false;
 
 if (!Math.imul) Math.imul = function(a, b) {
   var aHi = (a >>> 16) & 0xffff;
@@ -582,10 +583,57 @@ function updateScroll() {
 }
 window.addEventListener('resize', updateScroll);
 
+function refresh() {
+  for (var tag in tiles) {
+    if (!tiles.hasOwnProperty(tag)) continue;
+    delete tiles[tag];
+  }
+  if (recyclerImg !== null) {
+    recyclerImg.length = 0;
+  }
+  var scroller = document.getElementById('scroller');
+  while (scroller.firstChild) scroller.removeChild(scroller.lastChild);
+  updateScroll();
+}
+
+function applySettings(params) {
+  // (No Object.assign in IE, and the settings are currently separate globals -- yuck!)
+  var changes = false;
+
+  // Monochrome
+  var newMonochrome = params.hasOwnProperty('monochrome');
+  changes |= (monochrome !== newMonochrome);
+  monochrome = newMonochrome;
+
+  // Refresh full screen on changes
+  if (changes) refresh()
+}
+
+function hashchange() {
+  var hash = location.hash;
+  if (hash.length > 0 && hash[0] == '#') hash = hash.slice(1);
+  var paramPairList = hash.split('&');
+  var params = {};
+  for (var i = 0; i < paramPairList.length; i++) {
+    var paramPair = paramPairList[i];
+    var idx = paramPair.indexOf('='); // cannot use split if value might contain '='
+    if (idx >= 0) {
+      name = paramPair.slice(0, idx);
+      value = paramPair.slice(idx + 1);
+      params[name] = value;
+    } else {
+      params[paramPair] = null; // key without value
+    }
+  }
+  applySettings(params);
+}
+
 function start() {
   updateTiles();      // create initial set now
   updateScroll();     // trigger recalculate
   startAnimation();   // begin animation (will auto-stop)
+  window.addEventListener('hashchange', hashchange);
+  hashchange();
 }
 
 function keyboardScroll() {
@@ -1001,7 +1049,7 @@ return;
 }
 
 function generateImage(id) {
-  var result = Sprite.generate("" + id);
+  var result = Sprite.generate("" + id, monochrome);
   var dataUri = result.asDataUri(alpha);
   return dataUri;
 };

@@ -18,7 +18,7 @@ html {
 <body>
 <h1>Sprite Generator Demo</h1>
 <p>This is an 8-bit pixel art style sprite generator, suitable for avatars.  This is an entirely JavaScript implementation based on the techniques used by Lj V. Miranda for the Python/Seagull/Matplotlib-based: <a href="https://github.com/ljvmiranda921/sprites-as-a-service">Sprites-as-a-Service</a>.  As such, this version may be easily run client- or server-side.</p>
-<p><label>Seed: <input id="seed" value="0"></label> -- try changing this.</p>
+<p><label>Seed: <input id="seed" value="0"></label> -- try changing this. (Experimental: <label><input id="monochrome" type="checkbox">Monochrome</label>)</p>
 <div><img class="sprite" width="360" /></div>
 <p>See also:</p>
 <ul>
@@ -31,12 +31,14 @@ import Sprite from './sprite.mjs';
 
 function generate() {
   const seed = document.querySelector('#seed').value;
-  const result = Sprite.generate(seed);
+  const monochrome = document.querySelector('#monochrome').checked;
+  const result = Sprite.generate(seed, monochrome);
   const dataUri = result.asDataUri();
   document.querySelector('.sprite').src = dataUri;
 };
 
 document.addEventListener('DOMContentLoaded', function() {
+  document.querySelector('#monochrome').addEventListener('change', generate);
   const seed = document.querySelector('#seed');
   seed.addEventListener('input', generate);
   seed.focus();

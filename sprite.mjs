@@ -309,8 +309,8 @@ export default class Sprite {
         console.log(lines.join('\n'));
         return lines;
     }
-    static generate(seed) {
-        if (typeof seed === 'undefined') {
+    static generate(seed, monochrome = false) {
+        if (typeof seed === 'undefined' || seed === null) {
             seed = (new Date()).toISOString();
         }
         let board = new Sprite(4, 8);
@@ -323,15 +323,22 @@ export default class Sprite {
         const rescaled = gradient.rescale();
         const combined = outline.combine(rescaled);
         const colors = Array();
-        colors.push([0x00, 0x00, 0x00, 0xff]);
-        colors.push([0xf2, 0xf2, 0xf2, 0xff]);
-        const rngState = rngSeed(hash(seed));
-        const randomByte = () => rngNext(rngState) & 0xff;
-        const randomColor = () => [randomByte(), randomByte(), randomByte(), 0xff];
-        for (let i = 0; i < 3; i++)
-            colors.push(randomColor());
-        colors.reverse();
-        colors[2][3] = 0x00; // Transparent background (when generating as alpha)
+        if (!monochrome) {
+            colors.push([0x00, 0x00, 0x00, 0xff]);
+            colors.push([0xf2, 0xf2, 0xf2, 0xff]);
+            const rngState = rngSeed(hash(seed));
+            const randomByte = () => rngNext(rngState) & 0xff;
+            const randomColor = () => [randomByte(), randomByte(), randomByte(), 0xff];
+            for (let i = 0; i < 3; i++)
+                colors.push(randomColor());
+            colors.reverse();
+            colors[2][3] = 0x00; // Transparent background (when generating as alpha)
+        }
+        else {
+            colors.push([0x00, 0x00, 0x00, 0xff]); // inside
+            colors.push([0x00, 0x00, 0x00, 0x00]); // background (transparent when using alpha)
+            colors.push([0xff, 0xff, 0xff, 0xff]); // outline
+        }
         combined.setColors(colors);
         return combined;
     }

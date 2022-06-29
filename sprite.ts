@@ -327,8 +327,8 @@ export default class Sprite {
   }
 
 
-  static generate(seed: string) {
-    if (typeof seed === 'undefined') {
+  static generate(seed: string, monochrome: boolean = false) {
+    if (typeof seed === 'undefined' || seed === null) {
         seed = (new Date()).toISOString();
     }
     
@@ -344,14 +344,20 @@ export default class Sprite {
     const combined = outline.combine(rescaled);
     
     const colors = Array<[number, number, number, number]>();
-    colors.push([0x00, 0x00, 0x00, 0xff]);
-    colors.push([0xf2, 0xf2, 0xf2, 0xff]);
-    const rngState = rngSeed(hash(seed));
-    const randomByte = (): number => rngNext(rngState) & 0xff;
-    const randomColor = (): [number, number, number, number] => [randomByte(), randomByte(), randomByte(), 0xff];
-    for (let i = 0; i < 3; i++) colors.push(randomColor());
-    colors.reverse();
-    colors[2][3] = 0x00;  // Transparent background (when generating as alpha)
+    if (!monochrome) {
+      colors.push([0x00, 0x00, 0x00, 0xff]);
+      colors.push([0xf2, 0xf2, 0xf2, 0xff]);
+      const rngState = rngSeed(hash(seed));
+      const randomByte = (): number => rngNext(rngState) & 0xff;
+      const randomColor = (): [number, number, number, number] => [randomByte(), randomByte(), randomByte(), 0xff];
+      for (let i = 0; i < 3; i++) colors.push(randomColor());
+      colors.reverse();
+      colors[2][3] = 0x00;  // Transparent background (when generating as alpha)
+    } else {
+      colors.push([0x00, 0x00, 0x00, 0xff]);  // inside
+      colors.push([0x00, 0x00, 0x00, 0x00]);  // background (transparent when using alpha)
+      colors.push([0xff, 0xff, 0xff, 0xff]);  // outline
+    }
     combined.setColors(colors);
     
     return combined;

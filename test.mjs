@@ -1,7 +1,10 @@
 import Sprite from './sprite.mjs'
 import fs from 'fs';
 
-const result = Sprite.generate();
+const seed = null;
+const monochrome = false;
+
+const result = Sprite.generate(seed, monochrome);
 
 // Output as data: URL
 const url = result.asDataUri(false);
