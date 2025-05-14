@@ -1,2 +1,3 @@
 *.bmp
 _local
+node_modules

@@ -40,7 +40,7 @@ img {
 }
 ```
 
-
 <!--
-tsc -t ES6 sprite.ts && move /y sprite.js sprite.mjs
+# npm run build && npm start TESTER
+npx tsc -t ES6 sprite.ts && node -e "require('fs').renameSync('sprite.js', 'sprite.mjs')"
 -->

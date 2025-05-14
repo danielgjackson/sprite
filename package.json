@@ -7,7 +7,9 @@
     "doc": "docs"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "npx tsc -t ES6 sprite.ts && node -e \"require('fs').renameSync('sprite.js', 'sprite.mjs')\"",
+    "start": "node test.mjs"
   },
   "repository": {
     "type": "git",
@@ -24,5 +26,8 @@
   "bugs": {
     "url": "https://github.com/danielgjackson/sprite/issues"
   },
-  "homepage": "https://github.com/danielgjackson/sprite#readme"
+  "homepage": "https://github.com/danielgjackson/sprite#readme",
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
 }

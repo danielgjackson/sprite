@@ -1,7 +1,7 @@
 import Sprite from './sprite.mjs'
 import fs from 'fs';
 
-const seed = null;
+const seed = process.argv.length > 2 ? process.argv.slice(2).join(' ') : null;
 const monochrome = false;
 
 const result = Sprite.generate(seed, monochrome);
@@ -26,10 +26,10 @@ console.log();
 
 function outputImageTerminal(color, width, height) {
   const t = '██'; // '██'; // '██', '▓▓', '▒▒', '░░'
-  for (let y = 0; y < result.height; y++) {
+  for (let y = 0; y < height; y++) {
     const lineParts = [];
-    for (let x = 0; x < result.width; x++) {
-      const c = colorData[y * result.width + x];
+    for (let x = 0; x < width; x++) {
+      const c = colorData[y * width + x];
       lineParts.push(`\x1B[38;2;${c[0]};${c[1]};${c[2]}m${t}`);
     }
     lineParts.push('\x1B[0m');
@@ -38,21 +38,21 @@ function outputImageTerminal(color, width, height) {
 }
 
 function outputImageTerminalSmall(color, width, height) {
-  for (let y = 0; y < result.height; y += 2) {
+  for (let y = 0; y < height; y += 2) {
     const lineParts = [];
-    for (let x = 0; x < result.width; x++) {
+    for (let x = 0; x < width; x++) {
       let c;
       
       // Background color
-      if (y + 1 < result.height) {
-        c = colorData[(y + 1) * result.width + x];
+      if (y + 1 < height) {
+        c = colorData[(y + 1) * width + x];
         lineParts.push(`\x1B[48;2;${c[0]};${c[1]};${c[2]}m`);
       } else {
         lineParts.push('\x1B[0m');  // reset (for background)
       }
       
       // Upper/foreground color and character
-      c = colorData[y * result.width + x];
+      c = colorData[y * width + x];
       lineParts.push(`\x1B[38;2;${c[0]};${c[1]};${c[2]}m▀`);
     }
     lineParts.push('\x1B[0m');

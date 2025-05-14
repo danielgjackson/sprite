@@ -309,9 +309,9 @@ export default class Sprite {
   
   // Debug output a board to the console
   debugOutput() {
-    const lines = [];
+    const lines : Array<string> = [];
     for (let y = 0; y < this.height; y++) {
-      const line = [];
+      const line : Array<string> = [];
       for (let x = 0; x < this.width; x++) {
         const value = this.getCell(x, y);
         if (Array.isArray(value)) line.push(JSON.stringify(value))
