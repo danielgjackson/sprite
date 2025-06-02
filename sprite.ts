@@ -131,8 +131,9 @@ export default class Sprite {
   private height: number;
   private values: Array<number>;
   private colors: Array<[number, number, number, number]> = [[0, 0, 0, 0xff], [0xff, 0xff, 0xff, 0xff]];
+  private seed: string | null = null;
 
-  constructor(width: number, height: number, values: Array<number> | null = null) {
+  constructor(width: number, height: number, values: Array<number> | null = null, seed: string | null = null) {
     this.width = width;
     this.height = height;
     if (typeof values === 'undefined' || values === null) {
@@ -140,6 +141,7 @@ export default class Sprite {
     } else {
       this.values = values.map((x) => x);
     }
+    this.seed = seed;
   }
   
   fill(value: number) {
@@ -187,7 +189,7 @@ export default class Sprite {
 
   // Evolve a new board following "game of life" rules
   evolve(numIterations = 1, extinction = 0.125, survival = 0.375) {
-    const output = new Sprite(this.width, this.height, this.values);
+    const output = new Sprite(this.width, this.height, this.values, this.seed);
     const scale = 8;    // count of connected cells
     const reproductionRule = (current: number, connected: number) => (current == 0) && (connected <= extinction * scale);
     const stasisRule = (current: number, connected: number) => (current == 1) && ((connected == 2) || (connected == Math.floor(survival * scale)));
@@ -200,7 +202,7 @@ export default class Sprite {
 
   // Duplicate the board mirrored around the vertical
   unfold() {
-    const output = new Sprite(2 * this.width, this.height);
+    const output = new Sprite(2 * this.width, this.height, null, this.seed);
     for (let y = 0; y < this.height; y++) {
       for (let x = 0; x < this.width; x++) {
         const value = this.getCell(x, y);
@@ -213,7 +215,7 @@ export default class Sprite {
   
   // Pad around the board
   pad(padding = 1, value = 1) {
-    const output = new Sprite(this.width + 2 * padding, this.height + 2 * padding);
+    const output = new Sprite(this.width + 2 * padding, this.height + 2 * padding, null, this.seed);
     output.fill(value);
     for (let y = 0; y < this.height; y++) {
       for (let x = 0; x < this.width; x++) {
@@ -226,7 +228,7 @@ export default class Sprite {
   
   // Outline
   outline() {
-    let output = new Sprite(this.width, this.height);
+    let output = new Sprite(this.width, this.height, null, this.seed);
     output.fill(0.5);
     for (let y = 0; y < this.height; y++) {
       for (let x = 0; x < this.width; x++) {
@@ -246,7 +248,7 @@ export default class Sprite {
   
   // Vertical gradient
   gradient() {
-    const output = new Sprite(this.width, this.height);
+    const output = new Sprite(this.width, this.height, null, this.seed);
     for (let y = 0; y < this.height; y++) {
       for (let x = 0; x < this.width; x++) {
         const v1 = this.getCell(x, y);
@@ -263,14 +265,14 @@ export default class Sprite {
   rescale(rangeMin = 0.2, rangeMax = 0.25) {
     const min = this.values.reduce((value, min) => (value < min ? value : min), Number.MAX_VALUE);
     const max = this.values.reduce((value, max) => (value > max ? value : max), Number.MIN_VALUE);
-    const output = new Sprite(this.width, this.height);
+    const output = new Sprite(this.width, this.height, null, this.seed);
     output.values = this.values.map((value) => ((value - min) / (max - min)) * (rangeMax - rangeMin) + rangeMin);
     return output;
   }
   
   // Combine outline with gradient
   combine(gradient: Sprite) {
-    const output = new Sprite(this.width, this.height);
+    const output = new Sprite(this.width, this.height, null, this.seed);
     output.values = this.values.map((value, i) => (value === 0) ? gradient.values[i] : value);
     return output;
   }
@@ -296,7 +298,7 @@ export default class Sprite {
   
   // Enlarge each cell by 'scale' times
   magnify(scale = 15) {
-    const output = new Sprite(this.width * scale, this.height * scale);
+    const output = new Sprite(this.width * scale, this.height * scale, null, this.seed);
     output.setColors(this.colors);
     for (let y = 0; y < output.height; y++) {
       for (let x = 0; x < output.width; x++) {
@@ -332,7 +334,7 @@ export default class Sprite {
         seed = (new Date()).toISOString();
     }
     
-    let board = new Sprite(4, 8);
+    let board = new Sprite(4, 8, null, seed);
     
     board.fillRandom(seed);
     board = board.evolve();
@@ -359,7 +361,7 @@ export default class Sprite {
       colors.push([0xff, 0xff, 0xff, 0xff]);  // outline
     }
     combined.setColors(colors);
-    
+
     return combined;
   }
 
