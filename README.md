@@ -4,9 +4,12 @@ This is an 8-bit pixel art style sprite generator, suitable for avatars.
 
 This is an entirely JavaScript implementation based on the techniques used by Lj V. Miranda for the Python/Seagull/Matplotlib-based: [Sprites-as-a-Service](https://github.com/ljvmiranda921/sprites-as-a-service).  As such, this version may be easily run client- or server-side.
 
+Try the demo:
+
+  * [Sprite Generator Demo](https://danielgjackson.github.io/sprite/)
+
 See also:
 
-  * [Demo](https://danielgjackson.github.io/sprite/)
   * [Infinite Sprites!](https://danielgjackson.github.io/sprite/infinite.html)
   * [Sprites-as-a-Service](https://github.com/ljvmiranda921/sprites-as-a-service) -- the original implementation, whose techniques are recreated in this library.
   * Something a bit similar: [Space Invader Generator](https://muffinman.io/blog/invaders/)
