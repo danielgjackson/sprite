@@ -9,6 +9,7 @@ See also:
   * [Demo](https://danielgjackson.github.io/sprite/)
   * [Infinite Sprites!](https://danielgjackson.github.io/sprite/infinite.html)
   * [Sprites-as-a-Service](https://github.com/ljvmiranda921/sprites-as-a-service) -- the original implementation, whose techniques are recreated in this library.
+  * Something a bit similar: [Space Invader Generator](https://muffinman.io/blog/invaders/)
 
 ## Usage
 
