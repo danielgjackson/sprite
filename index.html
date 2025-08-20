@@ -18,13 +18,14 @@ html {
 <body>
 <h1>Sprite Generator Demo</h1>
 <p>This is an 8-bit pixel art style sprite generator, suitable for avatars.  This is an entirely JavaScript implementation based on the techniques used by Lj V. Miranda for the Python/Seagull/Matplotlib-based: <a href="https://github.com/ljvmiranda921/sprites-as-a-service">Sprites-as-a-Service</a>.  As such, this version may be easily run client- or server-side.</p>
-<p><label>Seed: <input id="seed" value="0"></label> -- try changing this. (Experimental: <label><input id="monochrome" type="checkbox">Monochrome</label>)</p>
+<p><label>Seed: <input id="seed" value="0"></label> <button id="regenerate">🔄 Random</button> (Experimental: <label><input id="monochrome" type="checkbox">Monochrome</label>)</p>
 <div><img class="sprite" width="360" /></div>
 <p>See also:</p>
 <ul>
   <li><a href="https://github.com/danielgjackson/sprite">GitHub Project Page</a></li>
   <li><a href="https://danielgjackson.github.io/sprite/infinite.html">Infinite Sprites!</a></li>
   <li><a href="https://github.com/ljvmiranda921/sprites-as-a-service">Sprites-as-a-Service</a> -- the original implementation, whose techniques are recreated in this library.</li>
+  <li>Something a bit similar: <a href="https://muffinman.io/blog/invaders/">Space Invader Generator</a></li>
 </ul>
 <script type="module">
 import Sprite from './sprite.mjs';
@@ -41,6 +42,11 @@ document.addEventListener('DOMContentLoaded', function() {
   document.querySelector('#monochrome').addEventListener('change', generate);
   const seed = document.querySelector('#seed');
   seed.addEventListener('input', generate);
+  const regenerate = document.querySelector('#regenerate');
+  regenerate.addEventListener('click', function() {
+    seed.value = Math.floor(Math.random() * 0x7FFFFFFF);
+    generate();
+  });
   seed.focus();
   seed.select();
   generate();
