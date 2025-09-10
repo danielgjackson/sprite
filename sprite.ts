@@ -125,7 +125,7 @@ function BitmapGenerate(data: Array<[number, number, number, number]>, width: nu
 
 
 
-export default class Sprite {
+class Sprite {
   
   private width: number;
   private height: number;
@@ -386,3 +386,6 @@ export default class Sprite {
   }
 
 }
+
+// Hack (after build step, otherwise tsc reformats) to export only if imported as a module (top-level await a regexp divided, otherwise an undefined variable divided followed by a comment)
+/*#if(0)typeof await/0//0;#*/ export default Sprite

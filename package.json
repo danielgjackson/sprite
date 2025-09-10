@@ -8,7 +8,7 @@
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "npx tsc -t ES6 sprite.ts && node -e \"require('fs').renameSync('sprite.js', 'sprite.mjs')\"",
+    "build": "npx tsc -t ES6 sprite.ts && node -e \"const fs = require('fs'); fs.writeFileSync('sprite.js', fs.readFileSync('sprite.js').toString().replaceAll('/*#', '').replaceAll('#*/', '')); fs.renameSync('sprite.js', 'sprite.mjs');\"",
     "start": "node test.mjs"
   },
   "repository": {
@@ -28,6 +28,6 @@
   },
   "homepage": "https://github.com/danielgjackson/sprite#readme",
   "devDependencies": {
-    "typescript": "^5.8.3"
+    "typescript": "^5.9.2"
   }
 }

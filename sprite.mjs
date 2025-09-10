@@ -116,7 +116,7 @@ function BitmapGenerate(data, width, height, alpha = false) {
     }
     return buffer;
 }
-export default class Sprite {
+class Sprite {
     constructor(width, height, values = null, seed = null) {
         this.colors = [[0, 0, 0, 0xff], [0xff, 0xff, 0xff, 0xff]];
         this.seed = null;
@@ -364,3 +364,5 @@ export default class Sprite {
         }
     }
 }
+// Hack (after build step, otherwise tsc reformats) to export only if imported as a module (top-level await a regexp divided, otherwise an undefined variable divided followed by a comment)
+if(0)typeof await/0//0; export default Sprite;
